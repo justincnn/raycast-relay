@@ -115,12 +115,18 @@ curl http://localhost:3000/health
 - push 到 `main`
 - 手动触发（`workflow_dispatch`）
 
-### 你需要在 GitHub 仓库中配置 Secrets
+### 构建架构
 
-进入 GitHub 仓库 -> `Settings` -> `Secrets and variables` -> `Actions`，添加：
+工作流当前仅构建并推送 **Linux ARM64** 镜像：
 
-- `DOCKERHUB_USERNAME`：Docker Hub 用户名
-- `DOCKERHUB_TOKEN`：Docker Hub Access Token（不是密码）
+- `linux/arm64`
+
+### 已配置 Secrets
+
+当前仓库已配置以下 GitHub Actions Secrets：
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
 
 ### 发布标签策略
 
@@ -129,6 +135,7 @@ curl http://localhost:3000/health
 - `latest`
 - `sha-<short>`（提交短哈希）
 - 分支名标签（如 `main`）
+
 
 ---
 
