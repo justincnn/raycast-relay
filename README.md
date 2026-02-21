@@ -1,103 +1,155 @@
-# Raycast Relay
+# Raycast Relay (Docker Edition)
 
-OpenAI-compatible proxy for Raycast AI, deployed as a Cloudflare Worker.
+Raycast Relay 是一个 OpenAI 兼容接口代理，将 Raycast AI 能力暴露为标准 `v1` API。
 
-Languages: [English](README.md) | [中文](README.zh.md) | [日本語](README.ja.md)
+本仓库已改造为 **Docker 优先部署**：
+- 本地可直接用 Docker 运行
+- 推送到 GitHub 后，可由 GitHub Actions 自动构建并推送镜像到 Docker Hub
 
-**Features**
-- OpenAI-compatible `v1/chat/completions` and `v1/models`
-- Raycast model catalog with capability metadata and reroute logging
-- Vision input via image uploads
-- Remote tools for web and image generation
-- `model:effort` shorthand for reasoning effort
+---
 
-**Setup**
-1. Install and deploy.
-   ```bash
-   npm install
-   npm run deploy
-   ```
-2. Configure secrets.
-   ```bash
-   wrangler secret put RAYCAST_TOKEN
-   wrangler secret put IMAGE_TOKEN
-   wrangler secret put API_KEY
-   ```
+## 功能概览
 
-**Config**
-- `RAYCAST_TOKEN`: Required to access Advanced AI models. Extract from Raycast app requests.
-- `IMAGE_TOKEN`: Token used only for image uploads. Advanced subscription not required.
-- `API_KEY`: Optional. If set, requests must include `Authorization: Bearer <key>`.
-- `DEVICE_ID`: Optional 64-char hex. If unset, the worker generates one and caches it.
-- `SIG_SECRET`: Optional override for Raycast signature secret.
-- `DEBUG`: Set to `1` or `true` for verbose logs.
+- OpenAI 兼容接口：`/v1/chat/completions`、`/v1/models`
+- 支持流式与非流式响应
+- 支持图像输入（通过 Raycast 文件上传链路）
+- 支持远程工具转发（如 `web_search`、`nano_banana`）
+- 支持 `model:effort` 形式的推理强度简写
+- 健康检查：`/health`
 
-**Usage**
-Base URL:
-`https://your-worker.your-subdomain.workers.dev/v1`
+---
 
-Basic chat:
+## 环境变量
+
+运行容器时可用以下变量：
+
+- `RAYCAST_TOKEN`（可选，但建议）
+  - 用于访问 Raycast Advanced AI 模型
+- `IMAGE_TOKEN`（可选）
+  - 图像上传使用，不一定需要高级订阅
+- `API_KEY`（可选）
+  - 若设置，则访问 `/v1/chat/completions` 必须带：`Authorization: Bearer <API_KEY>`
+- `DEVICE_ID`（可选）
+  - 64 位十六进制设备 ID；不设置会自动生成并轮转
+- `SIG_SECRET`（可选）
+  - Raycast 签名密钥覆盖值
+- `DEBUG`（可选）
+  - `1` 或 `true` 开启调试日志
+- `PORT`（可选）
+  - 服务监听端口，默认 `3000`
+
+---
+
+## 使用方式
+
+### 1) 直接使用 Docker Hub 镜像
+
+> 将 `justincnn` 替换成你的 Docker Hub 用户名（如果你 fork 后自行发布）
+
 ```bash
-curl https://your-worker.your-subdomain.workers.dev/v1/chat/completions \
+docker run -d \
+  --name raycast-relay \
+  -p 3000:3000 \
+  -e API_KEY=your_api_key \
+  -e RAYCAST_TOKEN=your_raycast_token \
+  -e IMAGE_TOKEN=your_image_token \
+  justincnn/raycast-relay:latest
+```
+
+### 2) 本地构建镜像并运行
+
+```bash
+docker build -t raycast-relay:local .
+
+docker run --rm -p 3000:3000 \
+  -e API_KEY=your_api_key \
+  -e RAYCAST_TOKEN=your_raycast_token \
+  -e IMAGE_TOKEN=your_image_token \
+  raycast-relay:local
+```
+
+---
+
+## API 调用示例
+
+基地址：
+
+```text
+http://localhost:3000/v1
+```
+
+### Chat Completions
+
+```bash
+curl http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Authorization: Bearer your_api_key" \
   -d '{
     "model": "gpt-4o-mini",
-    "messages": [{ "role": "user", "content": "Hello from Raycast Relay" }]
+    "messages": [{"role": "user", "content": "Hello from Raycast Relay"}]
   }'
 ```
 
-Remote tools require `tool_choice` and a matching tool name. Raycast runs them server-side.
+### Models
 
-Web search example:
 ```bash
-curl https://your-worker.your-subdomain.workers.dev/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{
-    "model": "gpt-4o-mini",
-    "messages": [{ "role": "user", "content": "@web search the web for Raycast founders" }],
-    "tools": [
-      { "type": "function", "function": { "name": "web_search", "description": "Search the web" } }
-    ],
-    "tool_choice": "required"
-  }'
+curl http://localhost:3000/v1/models
 ```
 
-Image generation with Nano Banana using Gemini 3 Flash:
+### Health
+
 ```bash
-curl https://your-worker.your-subdomain.workers.dev/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{
-    "model": "gemini-3-flash-preview",
-    "messages": [
-      { "role": "user", "content": "@nano_banana create a stylized poster of a nano banana on a plate" }
-    ],
-    "tools": [
-      { "type": "function", "function": { "name": "nano_banana", "description": "Generate an image" } }
-    ],
-    "tool_choice": "required"
-  }'
+curl http://localhost:3000/health
 ```
 
-Image results are returned as markdown image URLs in the assistant `content`.
+---
 
-**Remote Tool Names**
-- `web_search`, `search_images`, `read_page`
-- `dalle`, `gpt_image`, `gemini_image`, `nano_banana`, `flux`, `flux-kontext`, `stable_diffusion`, `chart`
+## GitHub Actions 自动发布到 Docker Hub
 
-**Reasoning Effort**
-You can set reasoning effort in two ways:
-- Use `reasoning_effort` in the request body
-- Append `:effort` to the model name, for example `gpt-4o-mini:low`
+仓库已包含工作流：
 
-If both are provided, `reasoning_effort` wins.
+- `.github/workflows/docker-publish.yml`
 
-**Models**
-- `/v1/models` includes Advanced AI models only when `RAYCAST_TOKEN` is present.
-- Each model includes `access` (`free` or `pro`) and `replacement_model_id` when applicable.
-- If Raycast reroutes a request, it is logged.
+触发条件：
 
-**License**
+- push 到 `main`
+- 手动触发（`workflow_dispatch`）
+
+### 你需要在 GitHub 仓库中配置 Secrets
+
+进入 GitHub 仓库 -> `Settings` -> `Secrets and variables` -> `Actions`，添加：
+
+- `DOCKERHUB_USERNAME`：Docker Hub 用户名
+- `DOCKERHUB_TOKEN`：Docker Hub Access Token（不是密码）
+
+### 发布标签策略
+
+工作流会自动推送以下标签：
+
+- `latest`
+- `sha-<short>`（提交短哈希）
+- 分支名标签（如 `main`）
+
+---
+
+## 本地开发（非 Docker）
+
+```bash
+npm install
+npm run start:docker
+```
+
+服务默认监听 `0.0.0.0:3000`。
+
+---
+
+## 注意事项
+
+- 本项目仍保留 Cloudflare Worker 相关代码与配置文件，Docker 版本通过 Node HTTP 入口复用同一业务逻辑。
+- 若未设置 `API_KEY`，任何人都可访问聊天接口，请务必在公网环境设置。
+
+---
+
+## License
+
 MIT. See `LICENSE`.
