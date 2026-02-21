@@ -1,0 +1,27 @@
+services:
+  raycast-relay:
+    image: ${DOCKER_IMAGE:-justincnn/raycast-relay:latest}
+    container_name: raycast-relay
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      API_KEY: ${API_KEY}
+      RAYCAST_TOKEN: ${RAYCAST_TOKEN}
+      IMAGE_TOKEN: ${IMAGE_TOKEN}
+      SIG_SECRET: ${SIG_SECRET:-}
+      DEVICE_ID: ${DEVICE_ID:-}
+      DEBUG: ${DEBUG:-false}
+      PORT: 3000
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
